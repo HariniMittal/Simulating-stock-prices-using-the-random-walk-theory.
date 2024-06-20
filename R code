@@ -1,0 +1,126 @@
+# Random walk analysis of Amazon Stock Prices
+# Harini
+# 2022-05-12
+library(quantmod)
+library(xts)
+library(rvest)
+library(tidyverse)
+library(stringr)
+library(forcats)
+library(lubridate)
+library(plotly)
+library(corrplot)
+library(dplyr)
+#Loads the company stock using ticker
+
+getSymbols("AMZN",from="2008-05-01",to="2018-05-01")
+## [1] "AMZN"
+#Stock returns in log
+
+AMZN_log_returns<-AMZN%>%Ad()%>%dailyReturn(type='log')
+#Mean of log stock returns 
+
+AMZN_mean_log<-mean(AMZN_log_returns)
+#round it to 4 decimal places
+
+mean_log<-c(AMZN_mean_log)
+
+mean_log<-round(mean_log,4)
+
+#standard deviation of log stock returns
+
+AMZN_sd_log<-sd(AMZN_log_returns)
+
+#round it to 4 decimal places 
+
+sd_log<-c(AMZN_sd_log)
+sd_log<-round(sd_log,4)
+
+
+#create data frame
+
+
+graphic1<-data.frame(rbind(c("AMZN",AMZN_mean_log,AMZN_sd_log)),stringsAsFactors = FALSE)
+
+
+
+
+graphic1<-data.frame(mean_log,sd_log)
+rownames(graphic1)<-c("AMZN")
+colnames(graphic1)<-c("Mean_Log_Return", "Sd_Log_Return")
+
+
+#Data frame contains the Amazon stock prices with each its average log return and standard deviation.
+#random walk: Rooted in past performance is not an indicator of future results. Price fluctuations can not be predicted with accuracy
+
+
+mu<-AMZN_mean_log
+sig<-AMZN_sd_log
+testsim<-rep(NA,1000)
+
+#generate random daily exponent increase rate using AMZN's mean and sd log returns
+
+#one year 252 trading days, simulate for 4 years 
+# 4*252 trading days
+
+price<-rep(NA,252*4)
+
+#most recent price
+price[1]<-as.numeric(AMZN$AMZN.Adjusted[length(AMZN$AMZN.Adjusted),])
+
+#start simulating prices
+
+for(i in 2:length(testsim)){
+  price[i]<-price[i-1]*exp(rnorm(1,mu,sig))
+}
+
+random_data<-cbind(price,1:(252*4))
+colnames(random_data)<-c("Price","Day")
+random_data<-as.data.frame(random_data)
+
+random_data%>%ggplot(aes(Day,Price))+geom_line()+labs(title="Amazon (AMZN) price simulation for 4 years")+theme_bw()
+## Warning: Removed 8 row(s) containing missing values (geom_path).
+ 
+#monte carlo simulation: incredibly useful forecasting tool to predict outcomes of events with many random variables
+
+
+N<-500
+mc_matrix<-matrix(nrow=252*4,ncol=N)
+mc_matrix[1,1]<-as.numeric(AMZN$AMZN.Adjusted[length(AMZN$AMZN.Adjusted),])
+
+for(j in 1:ncol(mc_matrix)){
+  mc_matrix[1,j]<-as.numeric(AMZN$AMZN.Adjusted[length(AMZN$AMZN.Adjusted),])
+  for(i in 2:nrow(mc_matrix)){
+    mc_matrix[i,j]<-mc_matrix[i-1,j]*exp(rnorm(1,mu,sig))
+  }
+}
+
+name<-str_c("Sim ",seq(1,500))
+name<-c("Day",name)
+
+final_mat<-cbind(1:(252*4),mc_matrix)
+final_mat<-as.tibble(final_mat)
+colnames(final_mat)<-name
+
+dim(final_mat) #1008 501
+## [1] 1008  501
+final_mat%>%gather("Simulation","Price",2:501)%>%ggplot(aes(x=Day,y=Price,Group=Simulation))+geom_line(alpha=0.2)+labs(title="Amazon Stock (AMZN): 500 Monte Carlo Simulations for 4 Years")+theme_bw()
+ 
+#is it likely? Let us check the confidence intervals
+#Average stock daily return
+
+
+probs<-c(0.005,0.025,0.25,0.5,0.75,0.975,0.995)
+final_mat[500,-1]%>%as.numeric()%>%quantile(probs=probs)
+##      0.5%      2.5%       25%       50%       75%     97.5%     99.5% 
+##  743.8662  944.2857 1886.0158 2722.9865 4013.8743 6932.3167 9575.2241
+#Let us now see the actual returns
+
+#Loads the company stock using ticker
+
+getSymbols("AMZN",from="2018-05-02",to="2022-05-02")
+## [1] "AMZN"
+AMZN%>%Ad()%>%chartSeries()
+ 
+
+   
